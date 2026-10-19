@@ -1,5 +1,5 @@
 /* 德语高频词 PWA · 离线缓存 */
-const CACHE = 'de-freq-35aaaa37c9';
+const CACHE = 'de-freq-dd3be9ffdd';
 const ASSETS = [
   './',
   './index.html',
