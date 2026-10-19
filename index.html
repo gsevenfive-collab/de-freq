@@ -264,7 +264,6 @@ tbody tr:active{background:rgba(91,157,255,.08)}
     <div class="chips">
       <button class="chip on" id="f-rich">精讲<span class="n" id="c-rich"></span></button>
       <button class="chip" id="f-all">全部<span class="n" id="c-all"></span></button>
-      <button class="chip" id="f-todo">未掌握<span class="n" id="c-todo"></span></button>
       <button class="chip" id="f-a">A 必背<span class="n" id="c-a"></span></button>
       <button class="chip" id="f-b">B 应认识<span class="n" id="c-b"></span></button>
       <button class="chip" id="f-c">C 可跳过<span class="n" id="c-c"></span></button>
@@ -272,9 +271,6 @@ tbody tr:active{background:rgba(91,157,255,.08)}
     <div class="overview" id="stats"></div>
   </div>
 
-  <div id="ctl-todo" hidden>
-    <div class="overview" id="todostats" style="margin-top:10px"></div>
-  </div>
 </header>
 
 <div class="installhint" id="installhint">
@@ -304,6 +300,10 @@ tbody tr:active{background:rgba(91,157,255,.08)}
     </div>
   </section>
 
+  <section id="view-mastered" class="view wrap" hidden style="padding-top:12px">
+    <div id="masteredbody"></div>
+  </section>
+
   <section id="view-fav" class="view wrap" hidden style="padding-top:12px">
     <div id="favbody"></div>
   </section>
@@ -318,12 +318,12 @@ tbody tr:active{background:rgba(91,157,255,.08)}
       </svg>
       <span>单词</span>
     </button>
-    <button class="navbtn" data-tab="todo">
+    <button class="navbtn" data-tab="mastered">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 12a8 8 0 1 1 2.3 5.6"/><path d="M4 18v-5h5"/>
+        <path d="M20 6L9 17l-5-5"/>
       </svg>
-      <span>待学</span>
-      <span class="badge" id="navbadge" hidden>0</span>
+      <span>已掌握</span>
+      <span class="badge" id="navmastered" hidden>0</span>
     </button>
     <button class="navbtn" data-tab="fav">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -430,15 +430,12 @@ function speak(text, rowEl, rate){
 /* ================= 列表 ================= */
 function visibleWords(){
   let rows = DATA;
-  if (tab === 'todo'){
-    rows = rows.filter(d => !mastered.has(d.w));
-  } else {
-    if (filter === 'rich') rows = rows.filter(d => d.ipa);
-    else if (filter === 'todo') rows = rows.filter(d => !mastered.has(d.w));
-    else if (filter === 'a') rows = rows.filter(d => d.lv === 'A');
-    else if (filter === 'b') rows = rows.filter(d => d.lv === 'B');
-    else if (filter === 'c') rows = rows.filter(d => d.lv === 'C');
-  }
+  /* 已掌握的词从浏览列表隐去 */
+  if (tab !== 'mastered') rows = rows.filter(d => !mastered.has(d.w));
+  if (filter === 'rich') rows = rows.filter(d => d.ipa);
+  else if (filter === 'a') rows = rows.filter(d => d.lv === 'A');
+  else if (filter === 'b') rows = rows.filter(d => d.lv === 'B');
+  else if (filter === 'c') rows = rows.filter(d => d.lv === 'C');
   if (query && tab === 'words'){
     const q = query.toLowerCase();
     rows = rows.filter(d => d.w.toLowerCase().includes(q)
@@ -471,7 +468,6 @@ function renderList(){
   const richN = DATA.filter(d => d.ipa).length;
   $('c-rich').textContent = richN;
   $('c-all').textContent = DATA.length;
-  $('c-todo').textContent = DATA.length - mastered.size;
   $('c-a').textContent = DATA.filter(d => d.lv === 'A').length;
   $('c-b').textContent = DATA.filter(d => d.lv === 'B').length;
   $('c-c').textContent = DATA.filter(d => d.lv === 'C').length;
@@ -479,13 +475,8 @@ function renderList(){
   $('stats').innerHTML = `显示 <b>${rows.length}</b> 词`
     + `<span class="sep">·</span>已掌握 <b>${mastered.size}</b>`
     + `<span class="sep">·</span>收藏 <b>${favWords.size}</b>`;
-  const left = DATA.length - mastered.size;
-  $('todostats').innerHTML = `未掌握 <b>${left}</b> 词`
-    + `<span class="sep">·</span>已掌握 <b>${mastered.size}</b>`
-    + `<span class="sep">·</span>按出现频率从高到低排列，点 ☆ 标记掌握`;
-  const b = $('navbadge');
-  /* 剩余很多时角标没意义（一上来就是 3000），只在剩余不多时提示 */
-  if (b){ b.hidden = (left === 0 || left > 99); b.textContent = left; }
+  const b = $('navmastered');
+  if (b){ b.hidden = mastered.size === 0; b.textContent = mastered.size > 99 ? '99+' : mastered.size; }
 }
 
 /* ================= 收藏页 ================= */
@@ -506,15 +497,35 @@ function renderFav(){
       </div>`).join('') + `</div>`;
 }
 
+/* ================= 已掌握 ================= */
+function renderMastered(){
+  const ws = [...mastered].map(w => DATA.find(d => d.w === w)).filter(Boolean).sort((a, b) => a.r - b.r);
+  const box = $('masteredbody');
+  if (!ws.length){
+    box.innerHTML = '<div class="empty"><span class="big">✓</span>还没有已掌握的词<br>单词右侧点 ☆ 就会收到这里</div>';
+    return;
+  }
+  box.innerHTML = `<div class="favsec"><h3>已掌握 <span class="cnt">${ws.length}</span> 词</h3>`
+    + ws.map(d => `<div class="fitem">
+        <div class="main"><div class="w">${esc(d.w)}</div>
+        <div class="m">${esc(d.cn)}</div></div>
+        <button class="spk" data-say="${esc(d.w)}">🔊</button>
+        <button class="spk spkw" data-say="${esc(d.w)}" data-rate="0.45">🐢</button>
+        <button class="mk on" data-mk="${esc(d.w)}">★</button>
+      </div>`).join('') + `</div>`;
+}
+
 /* ================= 视图切换 ================= */
 function setTab(t){
   tab = t;
   document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  $('view-list').hidden = (t === 'fav');
+  $('view-list').hidden = (t === 'mastered' || t === 'fav');
+  $('view-mastered').hidden = (t !== 'mastered');
   $('view-fav').hidden = (t !== 'fav');
   $('ctl-words').hidden = (t !== 'words');
-  $('ctl-todo').hidden = (t !== 'todo');
-  if (t === 'fav') renderFav(); else renderList();
+  if (t === 'fav') renderFav();
+  else if (t === 'mastered') renderMastered();
+  else renderList();
   window.scrollTo(0, 0);
   if (history.replaceState) history.replaceState(null, '', '#' + t);
 }
@@ -535,7 +546,11 @@ document.addEventListener('click', e => {
   if (mk){
     const w = mk.dataset.mk;
     mastered.has(w) ? mastered.delete(w) : mastered.add(w);
-    saveAll(); renderList(); return;
+    saveAll();
+    if (tab === 'mastered') renderMastered();
+    else if (tab === 'fav') renderFav();
+    else renderList();
+    return;
   }
   const fv = t.closest('[data-fav]');
   if (fv){
@@ -554,13 +569,16 @@ document.addEventListener('click', e => {
   if (t.id === 'sheet-close' || t.classList.contains('sheet')){ closeSheet(); return; }
 });
 
-const FILTERS = { 'f-all':'all', 'f-rich':'rich', 'f-todo':'todo', 'f-a':'a', 'f-b':'b', 'f-c':'c' };
+const FILTERS = { 'f-rich':'rich', 'f-all':'all', 'f-a':'a', 'f-b':'b', 'f-c':'c' };
 Object.keys(FILTERS).forEach(id => {
   const el = $(id);
   if (el) el.onclick = () => {
-    filter = FILTERS[id];
+    const want = FILTERS[id];
+    /* 再点一次已选中的筛选 -> 取消，显示全部 */
+    filter = (filter === want && want !== 'all') ? 'all' : want;
     document.querySelectorAll('#ctl-words .chip').forEach(b => b.classList.remove('on'));
-    el.classList.add('on');
+    const on = Object.keys(FILTERS).find(k => FILTERS[k] === filter);
+    if (on && $(on)) $(on).classList.add('on');
     renderList();
   };
 });
@@ -593,10 +611,13 @@ function openSheet(){
       在手机（iOS/Android）上用会正常；电脑上可到
       「设置 → 时间和语言 → 语音 → 添加语音」装本地德语语音。</span></div>
     <div class="kv"><span class="k">已掌握</span><span class="v">${mastered.size} 词</span></div>
-    <div class="kv"><span class="k">版本</span><span class="v">v 2026-10-19 14:31</span></div>
+    <div class="kv"><span class="k">版本</span><span class="v">v 2026-10-19 14:41</span></div>
     <div class="act">
       <button id="voice-test">🔊 试听一句</button>
       <button id="sheet-close">关闭</button>
+    </div>
+    <div class="act">
+      <button id="reset-mastered">重置进度（清空已掌握）</button>
     </div>
     <div class="act">
       <button class="danger" id="reset-all">清空全部记录</button>
@@ -612,6 +633,12 @@ function openSheet(){
     speak('Hallo. Ich bin hier. Das ist ein Test.', null, 0.9);
     vt.textContent = '正在播放…';
     setTimeout(() => { vt.textContent = '🔊 试听一句'; }, 2400);
+  };
+  const rm = div.querySelector('#reset-mastered');
+  if (rm) rm.onclick = () => {
+    if (confirm('重置进度？已掌握的词会回到全部列表（收藏保留）。')) {
+      mastered = new Set(); saveAll(); closeSheet(); setTab(tab);
+    }
   };
   const rb = div.querySelector('#reset-all');
   if (rb) rb.onclick = () => {
@@ -647,7 +674,7 @@ document.addEventListener('keydown', e => {
     $('installhint').style.display = 'block';
   }
   const hash = (location.hash || '').replace('#', '');
-  setTab(['words', 'todo', 'fav'].indexOf(hash) >= 0 ? hash : 'words');
+  setTab(['words', 'mastered', 'fav'].indexOf(hash) >= 0 ? hash : 'words');
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
