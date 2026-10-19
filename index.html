@@ -66,9 +66,7 @@ svg{display:block}
 .searchbox input:focus{border-color:var(--acc);background:var(--card2)}
 
 /* 横向滚动筛选 */
-.chips{display:flex;gap:7px;overflow-x:auto;margin-top:9px;
-  padding-bottom:1px;scrollbar-width:none}
-.chips::-webkit-scrollbar{display:none}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;padding-bottom:1px}
 .chip{flex:none;padding:7px 13px;border-radius:20px;font-size:12.5px;
   background:var(--card);border:1px solid var(--line);color:var(--fg2);
   transition:.15s;white-space:nowrap;font-weight:500}
@@ -267,6 +265,7 @@ tbody tr:active{background:rgba(91,157,255,.08)}
       <button class="chip" id="f-a">A 必背<span class="n" id="c-a"></span></button>
       <button class="chip" id="f-b">B 应认识<span class="n" id="c-b"></span></button>
       <button class="chip" id="f-c">C 可跳过<span class="n" id="c-c"></span></button>
+      <button class="chip" id="f-mastered">✓ 已掌握<span class="n" id="c-mastered"></span></button>
     </div>
     <div class="overview" id="stats"></div>
   </div>
@@ -300,10 +299,6 @@ tbody tr:active{background:rgba(91,157,255,.08)}
     </div>
   </section>
 
-  <section id="view-mastered" class="view wrap" hidden style="padding-top:12px">
-    <div id="masteredbody"></div>
-  </section>
-
   <section id="view-fav" class="view wrap" hidden style="padding-top:12px">
     <div id="favbody"></div>
   </section>
@@ -317,13 +312,6 @@ tbody tr:active{background:rgba(91,157,255,.08)}
         <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h4.5a1.5 1.5 0 0 0 1.5-1.5z"/>
       </svg>
       <span>单词</span>
-    </button>
-    <button class="navbtn" data-tab="mastered">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 6L9 17l-5-5"/>
-      </svg>
-      <span>已掌握</span>
-      <span class="badge" id="navmastered" hidden>0</span>
     </button>
     <button class="navbtn" data-tab="fav">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -430,8 +418,9 @@ function speak(text, rowEl, rate){
 /* ================= 列表 ================= */
 function visibleWords(){
   let rows = DATA;
-  /* 已掌握的词从浏览列表隐去 */
-  if (tab !== 'mastered') rows = rows.filter(d => !mastered.has(d.w));
+  /* 选「已掌握」时只显示已掌握的；其余筛选都先把已掌握的隐去 */
+  if (filter === 'mastered') rows = rows.filter(d => mastered.has(d.w));
+  else rows = rows.filter(d => !mastered.has(d.w));
   if (filter === 'rich') rows = rows.filter(d => d.ipa);
   else if (filter === 'a') rows = rows.filter(d => d.lv === 'A');
   else if (filter === 'b') rows = rows.filter(d => d.lv === 'B');
@@ -471,12 +460,11 @@ function renderList(){
   $('c-a').textContent = DATA.filter(d => d.lv === 'A').length;
   $('c-b').textContent = DATA.filter(d => d.lv === 'B').length;
   $('c-c').textContent = DATA.filter(d => d.lv === 'C').length;
+  $('c-mastered').textContent = mastered.size;
   $('hd-num').textContent = DATA.length;
   $('stats').innerHTML = `显示 <b>${rows.length}</b> 词`
     + `<span class="sep">·</span>已掌握 <b>${mastered.size}</b>`
     + `<span class="sep">·</span>收藏 <b>${favWords.size}</b>`;
-  const b = $('navmastered');
-  if (b){ b.hidden = mastered.size === 0; b.textContent = mastered.size > 99 ? '99+' : mastered.size; }
 }
 
 /* ================= 收藏页 ================= */
@@ -497,35 +485,14 @@ function renderFav(){
       </div>`).join('') + `</div>`;
 }
 
-/* ================= 已掌握 ================= */
-function renderMastered(){
-  const ws = [...mastered].map(w => DATA.find(d => d.w === w)).filter(Boolean).sort((a, b) => a.r - b.r);
-  const box = $('masteredbody');
-  if (!ws.length){
-    box.innerHTML = '<div class="empty"><span class="big">✓</span>还没有已掌握的词<br>单词右侧点 ☆ 就会收到这里</div>';
-    return;
-  }
-  box.innerHTML = `<div class="favsec"><h3>已掌握 <span class="cnt">${ws.length}</span> 词</h3>`
-    + ws.map(d => `<div class="fitem">
-        <div class="main"><div class="w">${esc(d.w)}</div>
-        <div class="m">${esc(d.cn)}</div></div>
-        <button class="spk" data-say="${esc(d.w)}">🔊</button>
-        <button class="spk spkw" data-say="${esc(d.w)}" data-rate="0.45">🐢</button>
-        <button class="mk on" data-mk="${esc(d.w)}">★</button>
-      </div>`).join('') + `</div>`;
-}
-
 /* ================= 视图切换 ================= */
 function setTab(t){
   tab = t;
   document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  $('view-list').hidden = (t === 'mastered' || t === 'fav');
-  $('view-mastered').hidden = (t !== 'mastered');
+  $('view-list').hidden = (t === 'fav');
   $('view-fav').hidden = (t !== 'fav');
   $('ctl-words').hidden = (t !== 'words');
-  if (t === 'fav') renderFav();
-  else if (t === 'mastered') renderMastered();
-  else renderList();
+  if (t === 'fav') renderFav(); else renderList();
   window.scrollTo(0, 0);
   if (history.replaceState) history.replaceState(null, '', '#' + t);
 }
@@ -547,9 +514,7 @@ document.addEventListener('click', e => {
     const w = mk.dataset.mk;
     mastered.has(w) ? mastered.delete(w) : mastered.add(w);
     saveAll();
-    if (tab === 'mastered') renderMastered();
-    else if (tab === 'fav') renderFav();
-    else renderList();
+    if (tab === 'fav') renderFav(); else renderList();
     return;
   }
   const fv = t.closest('[data-fav]');
@@ -569,7 +534,7 @@ document.addEventListener('click', e => {
   if (t.id === 'sheet-close' || t.classList.contains('sheet')){ closeSheet(); return; }
 });
 
-const FILTERS = { 'f-rich':'rich', 'f-all':'all', 'f-a':'a', 'f-b':'b', 'f-c':'c' };
+const FILTERS = { 'f-rich':'rich', 'f-all':'all', 'f-a':'a', 'f-b':'b', 'f-c':'c', 'f-mastered':'mastered' };
 Object.keys(FILTERS).forEach(id => {
   const el = $(id);
   if (el) el.onclick = () => {
@@ -611,7 +576,7 @@ function openSheet(){
       在手机（iOS/Android）上用会正常；电脑上可到
       「设置 → 时间和语言 → 语音 → 添加语音」装本地德语语音。</span></div>
     <div class="kv"><span class="k">已掌握</span><span class="v">${mastered.size} 词</span></div>
-    <div class="kv"><span class="k">版本</span><span class="v">v 2026-10-19 14:41</span></div>
+    <div class="kv"><span class="k">版本</span><span class="v">v 2026-10-19 14:46</span></div>
     <div class="act">
       <button id="voice-test">🔊 试听一句</button>
       <button id="sheet-close">关闭</button>
@@ -674,7 +639,7 @@ document.addEventListener('keydown', e => {
     $('installhint').style.display = 'block';
   }
   const hash = (location.hash || '').replace('#', '');
-  setTab(['words', 'mastered', 'fav'].indexOf(hash) >= 0 ? hash : 'words');
+  setTab(['words', 'fav'].indexOf(hash) >= 0 ? hash : 'words');
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
