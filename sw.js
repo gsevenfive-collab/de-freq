@@ -1,9 +1,10 @@
 /* 德语高频词 PWA · 离线缓存 */
-const CACHE = 'de-freq-baa78096a3';
+const CACHE = 'de-freq-6abe9482f5';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './sponsor.jpg',
   './icons/favicon-32.png',
   './icons/icon-180.png',
   './icons/icon-192.png',
